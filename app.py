@@ -6,6 +6,17 @@ import pandas as pd
 import datetime
 import os
 
+USER_FILE = "users.csv"
+
+def load_users():
+    if not os.path.exists(USER_FILE):
+        df = pd.DataFrame(columns=["username","password","role"])
+        df.to_csv(USER_FILE, index=False)
+    return pd.read_csv(USER_FILE)
+
+def save_users(df):
+    df.to_csv(USER_FILE, index=False)
+
 # ================= CONFIG =================
 st.set_page_config("Absensi Guru", layout="centered")
 
@@ -48,10 +59,13 @@ def login_page():
     p = st.text_input("Password", type="password")
 
     if st.button("Login"):
-        if u in USERS and USERS[u]["password"] == p:
+        df = load_users()
+        user = df[(df.username == u) & (df.password == p)]
+
+        if not user.empty:
             st.session_state.login = True
             st.session_state.user = u
-            st.session_state.role = USERS[u]["role"]
+            st.session_state.role = user.iloc[0]["role"]
             st.rerun()
         else:
             st.error("Username / Password salah")
