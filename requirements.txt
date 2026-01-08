@@ -1,3 +1,5 @@
 streamlit
 pillow
 pyzbar
+qrcode
+pandas
