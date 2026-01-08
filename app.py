@@ -140,7 +140,7 @@ def admin_page():
 # ================= GURU PAGE =================
 def guru_page():
     st.subheader("👨‍🏫 Absensi Guru")
-    st.info("Scan QR untuk absen masuk / pulang")
+    st.info("Scan QR untuk absensi")
 
     img = st.camera_input("📸 Scan QR")
 
@@ -151,34 +151,47 @@ def guru_page():
     decoded = decode(image)
 
     if not decoded:
-        st.error("QR tidak terbaca")
+        st.error("❌ QR tidak terbaca")
         return
 
     qr_data = decoded[0].data.decode()
     today = str(datetime.date.today())
-    now = datetime.datetime.now().strftime("%H:%M:%S")
+    now_time = datetime.datetime.now()
+    now_str = now_time.strftime("%H:%M:%S")
 
+    # Validasi QR
     if qr_data != f"ABSEN_GURU_{today}":
-        st.error("QR tidak valid / bukan hari ini")
+        st.error("❌ QR tidak valid / bukan hari ini")
         return
 
+    # Load / init CSV
     if os.path.exists(ABSEN_FILE):
         df = pd.read_csv(ABSEN_FILE)
     else:
         df = pd.DataFrame(columns=COLUMNS)
 
-    mask = (df["tanggal"]==today) & (df["guru"]==st.session_state.user)
+    mask = (df["tanggal"] == today) & (df["guru"] == st.session_state.user)
 
-    if not mask.any():
-        df.loc[len(df)] = [today, st.session_state.user, now, ""]
-        st.success(f"✅ Absen MASUK ({now})")
-    else:
-        idx = df[mask].index[0]
-        if df.loc[idx,"jam_pulang"]=="" or pd.isna(df.loc[idx,"jam_pulang"]):
-            df.loc[idx,"jam_pulang"] = now
-            st.success(f"✅ Absen PULANG ({now})")
+    # ================= LOGIKA JAM =================
+    if now_time.hour < 8:
+        # ===== JAM MASUK =====
+        if mask.any():
+            st.warning("⚠️ Kamu sudah absen masuk hari ini")
         else:
-            st.warning("⚠️ Sudah absen masuk & pulang")
+            df.loc[len(df)] = [today, st.session_state.user, now_str, ""]
+            st.success(f"✅ Absen MASUK berhasil ({now_str})")
+
+    else:
+        # ===== JAM PULANG =====
+        if not mask.any():
+            st.warning("⚠️ Kamu belum absen masuk hari ini")
+        else:
+            idx = df[mask].index[0]
+            if df.loc[idx, "jam_pulang"] == "" or pd.isna(df.loc[idx, "jam_pulang"]):
+                df.loc[idx, "jam_pulang"] = now_str
+                st.success(f"✅ Absen PULANG berhasil ({now_str})")
+            else:
+                st.warning("⚠️ Kamu sudah absen pulang hari ini")
 
     df.to_csv(ABSEN_FILE, index=False)
     st.dataframe(df[mask])
