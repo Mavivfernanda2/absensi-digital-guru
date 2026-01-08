@@ -92,18 +92,6 @@ def admin_page():
         save_config(jam_masuk.strftime("%H:%M"))
         st.success("Jam masuk berhasil disimpan")
 
-    # ================= QR ABSENSI =================
-    st.divider()
-    st.subheader("📌 QR Absensi Hari Ini")
-
-    today = datetime.date.today()
-    kode = f"ABSEN_GURU_{today}"
-
-    st.code(kode)
-    qr = qrcode.make(kode)
-    qr.save(QR_PATH)
-    st.image(QR_PATH, use_container_width=True)
-
     # ================= REKAP =================
     st.divider()
     st.subheader("📊 Rekap Absensi")
