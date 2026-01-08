@@ -17,6 +17,7 @@ USERS = {
 
 ABSEN_FILE = "absensi.csv"
 QR_PATH = "qr_absen.png"
+COLUMNS = ["tanggal", "guru", "jam_masuk", "jam_pulang"]
 
 # ================= SESSION =================
 if "login" not in st.session_state:
@@ -91,53 +92,56 @@ def guru_page():
 
     img = st.camera_input("📸 Scan QR di sini")
 
-    if img:
-        image = Image.open(img)
-        decoded = decode(image)
+    if not img:
+        return
 
-        if not decoded:
-            st.error("QR tidak terbaca")
-            return
+    image = Image.open(img)
+    decoded = decode(image)
 
-        qr_data = decoded[0].data.decode("utf-8")
-        today = str(datetime.date.today())
-        now = datetime.datetime.now().strftime("%H:%M:%S")
+    if not decoded:
+        st.error("❌ QR tidak terbaca")
+        return
 
-        if qr_data != f"ABSEN_GURU_{today}":
-            st.error("QR tidak valid")
-            return
+    qr_data = decoded[0].data.decode("utf-8")
+    today = str(datetime.date.today())
+    now = datetime.datetime.now().strftime("%H:%M:%S")
 
-        # Load / create CSV
-        if os.path.exists(ABSEN_FILE):
-            df = pd.read_csv(ABSEN_FILE)
+    if qr_data != f"ABSEN_GURU_{today}":
+        st.error("❌ QR tidak valid / bukan hari ini")
+        return
+
+    # ===== LOAD / FIX CSV =====
+    if os.path.exists(ABSEN_FILE):
+        df = pd.read_csv(ABSEN_FILE)
+        if list(df.columns) != COLUMNS:
+            df = pd.DataFrame(columns=COLUMNS)
+    else:
+        df = pd.DataFrame(columns=COLUMNS)
+
+    # ===== CEK ABSENSI =====
+    mask = (df["tanggal"] == today) & (df["guru"] == st.session_state.user)
+
+    if not mask.any():
+        # JAM MASUK
+        df.loc[len(df)] = [today, st.session_state.user, now, ""]
+        st.success(f"✅ Absen MASUK berhasil ({now})")
+
+    else:
+        idx = df[mask].index[0]
+        if df.loc[idx, "jam_pulang"] == "" or pd.isna(df.loc[idx, "jam_pulang"]):
+            df.loc[idx, "jam_pulang"] = now
+            st.success(f"✅ Absen PULANG berhasil ({now})")
         else:
-            df = pd.DataFrame(columns=["tanggal", "guru", "jam_masuk", "jam_pulang"])
+            st.warning("⚠️ Kamu sudah absen masuk & pulang hari ini")
 
-        # Cek data hari ini
-        mask = (df["tanggal"] == today) & (df["guru"] == st.session_state.user)
-
-        if not mask.any():
-            # JAM MASUK
-            df.loc[len(df)] = [today, st.session_state.user, now, ""]
-            st.success(f"✅ Absen MASUK berhasil ({now})")
-
-        else:
-            idx = df[mask].index[0]
-            if df.loc[idx, "jam_pulang"] == "" or pd.isna(df.loc[idx, "jam_pulang"]):
-                # JAM PULANG
-                df.loc[idx, "jam_pulang"] = now
-                st.success(f"✅ Absen PULANG berhasil ({now})")
-            else:
-                st.warning("⚠️ Kamu sudah absen masuk & pulang hari ini")
-
-        df.to_csv(ABSEN_FILE, index=False)
-        st.dataframe(df[mask])
+    df.to_csv(ABSEN_FILE, index=False)
+    st.dataframe(df[mask])
 
 # ================= MAIN =================
 if not st.session_state.login:
     login_page()
 else:
-    col1, col2 = st.columns([6,1])
+    col1, col2 = st.columns([6, 1])
     with col2:
         logout()
 
