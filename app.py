@@ -6,44 +6,31 @@ import pandas as pd
 import datetime
 import os
 
+# ================= CONFIG =================
+st.set_page_config("Absensi Digital Guru", layout="centered")
+
 USER_FILE = "users.csv"
+ABSEN_FILE = "absensi.csv"
+QR_PATH = "qr_absen.png"
+COLUMNS = ["tanggal", "guru", "jam_masuk", "jam_pulang"]
+
+# ================= INIT FILE =================
+def init_users():
+    if not os.path.exists(USER_FILE):
+        df = pd.DataFrame([
+            {"username":"admin","password":"admin123","role":"admin"},
+            {"username":"guru01","password":"guru123","role":"guru"},
+            {"username":"guru02","password":"guru123","role":"guru"},
+        ])
+        df.to_csv(USER_FILE, index=False)
 
 def load_users():
-    if not os.path.exists(USER_FILE):
-        df = pd.DataFrame(columns=["username","password","role"])
-        df.to_csv(USER_FILE, index=False)
     return pd.read_csv(USER_FILE)
 
 def save_users(df):
     df.to_csv(USER_FILE, index=False)
 
-# ================= CONFIG =================
-st.set_page_config("Absensi Guru", layout="centered")
-
-USERS = {
-    "admin": {"password": "admin123", "role": "admin"},
-
-    "guru01": {"password": "guru123", "role": "guru"},
-    "guru02": {"password": "guru123", "role": "guru"},
-    "guru03": {"password": "guru123", "role": "guru"},
-    "guru04": {"password": "guru123", "role": "guru"},
-    "guru05": {"password": "guru123", "role": "guru"},
-    "guru06": {"password": "guru123", "role": "guru"},
-    "guru07": {"password": "guru123", "role": "guru"},
-    "guru08": {"password": "guru123", "role": "guru"},
-    "guru09": {"password": "guru123", "role": "guru"},
-    "guru10": {"password": "guru123", "role": "guru"},
-    "guru11": {"password": "guru123", "role": "guru"},
-    "guru12": {"password": "guru123", "role": "guru"},
-    "guru13": {"password": "guru123", "role": "guru"},
-    "guru14": {"password": "guru123", "role": "guru"},
-    "guru15": {"password": "guru123", "role": "guru"},
-}
-
-
-ABSEN_FILE = "absensi.csv"
-QR_PATH = "qr_absen.png"
-COLUMNS = ["tanggal", "guru", "jam_masuk", "jam_pulang"]
+init_users()
 
 # ================= SESSION =================
 if "login" not in st.session_state:
@@ -68,7 +55,7 @@ def login_page():
             st.session_state.role = user.iloc[0]["role"]
             st.rerun()
         else:
-            st.error("Username / Password salah")
+            st.error("❌ Username atau Password salah")
 
 # ================= LOGOUT =================
 def logout():
@@ -83,15 +70,11 @@ def admin_page():
     today = datetime.date.today()
     kode = f"ABSEN_GURU_{today}"
 
-    st.success("QR Absensi Hari Ini")
+    st.success("📌 QR Absensi Hari Ini")
     st.code(kode)
 
-    qr = qrcode.QRCode(version=1, box_size=10, border=4)
-    qr.add_data(kode)
-    qr.make(fit=True)
-    img_qr = qr.make_image(fill_color="black", back_color="white")
-    img_qr.save(QR_PATH)
-
+    qr = qrcode.make(kode)
+    qr.save(QR_PATH)
     st.image(QR_PATH, use_container_width=True)
 
     # ===== REKAP =====
@@ -102,24 +85,64 @@ def admin_page():
         df = pd.read_csv(ABSEN_FILE)
         st.dataframe(df, use_container_width=True)
 
-        excel_file = "rekap_absensi.xlsx"
-        df.to_excel(excel_file, index=False)
-
-        with open(excel_file, "rb") as f:
+        df.to_excel("rekap_absensi.xlsx", index=False)
+        with open("rekap_absensi.xlsx","rb") as f:
             st.download_button(
-                "⬇️ Download Rekap Excel",
+                "⬇️ Download Excel",
                 f,
                 file_name="rekap_absensi.xlsx"
             )
     else:
         st.info("Belum ada data absensi")
 
+    # ===== MANAJEMEN GURU =====
+    st.divider()
+    st.subheader("👥 Manajemen Guru")
+
+    users = load_users()
+
+    with st.expander("➕ Tambah Guru"):
+        u = st.text_input("Username Guru Baru")
+        p = st.text_input("Password", type="password")
+
+        if st.button("Tambah Guru"):
+            if u in users.username.values:
+                st.error("Username sudah ada")
+            else:
+                users.loc[len(users)] = [u, p, "guru"]
+                save_users(users)
+                st.success("Guru berhasil ditambahkan")
+                st.rerun()
+
+    st.dataframe(users)
+
+    guru_list = users[users.role=="guru"].username.tolist()
+    if guru_list:
+        selected = st.selectbox("Pilih Guru", guru_list)
+        new_pw = st.text_input("Password Baru")
+
+        col1, col2 = st.columns(2)
+
+        with col1:
+            if st.button("✏️ Update Password"):
+                users.loc[users.username==selected,"password"] = new_pw
+                save_users(users)
+                st.success("Password diperbarui")
+                st.rerun()
+
+        with col2:
+            if st.button("❌ Hapus Guru"):
+                users = users[users.username!=selected]
+                save_users(users)
+                st.warning("Guru dihapus")
+                st.rerun()
+
 # ================= GURU PAGE =================
 def guru_page():
     st.subheader("👨‍🏫 Absensi Guru")
     st.info("Scan QR untuk absen masuk / pulang")
 
-    img = st.camera_input("📸 Scan QR di sini")
+    img = st.camera_input("📸 Scan QR")
 
     if not img:
         return
@@ -128,40 +151,34 @@ def guru_page():
     decoded = decode(image)
 
     if not decoded:
-        st.error("❌ QR tidak terbaca")
+        st.error("QR tidak terbaca")
         return
 
-    qr_data = decoded[0].data.decode("utf-8")
+    qr_data = decoded[0].data.decode()
     today = str(datetime.date.today())
     now = datetime.datetime.now().strftime("%H:%M:%S")
 
     if qr_data != f"ABSEN_GURU_{today}":
-        st.error("❌ QR tidak valid / bukan hari ini")
+        st.error("QR tidak valid / bukan hari ini")
         return
 
-    # ===== LOAD / FIX CSV =====
     if os.path.exists(ABSEN_FILE):
         df = pd.read_csv(ABSEN_FILE)
-        if list(df.columns) != COLUMNS:
-            df = pd.DataFrame(columns=COLUMNS)
     else:
         df = pd.DataFrame(columns=COLUMNS)
 
-    # ===== CEK ABSENSI =====
-    mask = (df["tanggal"] == today) & (df["guru"] == st.session_state.user)
+    mask = (df["tanggal"]==today) & (df["guru"]==st.session_state.user)
 
     if not mask.any():
-        # JAM MASUK
         df.loc[len(df)] = [today, st.session_state.user, now, ""]
-        st.success(f"✅ Absen MASUK berhasil ({now})")
-
+        st.success(f"✅ Absen MASUK ({now})")
     else:
         idx = df[mask].index[0]
-        if df.loc[idx, "jam_pulang"] == "" or pd.isna(df.loc[idx, "jam_pulang"]):
-            df.loc[idx, "jam_pulang"] = now
-            st.success(f"✅ Absen PULANG berhasil ({now})")
+        if df.loc[idx,"jam_pulang"]=="" or pd.isna(df.loc[idx,"jam_pulang"]):
+            df.loc[idx,"jam_pulang"] = now
+            st.success(f"✅ Absen PULANG ({now})")
         else:
-            st.warning("⚠️ Kamu sudah absen masuk & pulang hari ini")
+            st.warning("⚠️ Sudah absen masuk & pulang")
 
     df.to_csv(ABSEN_FILE, index=False)
     st.dataframe(df[mask])
@@ -170,13 +187,13 @@ def guru_page():
 if not st.session_state.login:
     login_page()
 else:
-    col1, col2 = st.columns([6, 1])
+    col1,col2 = st.columns([6,1])
     with col2:
         logout()
 
     st.markdown(f"**Login sebagai:** `{st.session_state.user.upper()}`")
 
-    if st.session_state.role == "admin":
+    if st.session_state.role=="admin":
         admin_page()
     else:
         guru_page()
