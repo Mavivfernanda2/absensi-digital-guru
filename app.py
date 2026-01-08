@@ -105,9 +105,14 @@ def admin_page():
     st.divider()
     st.subheader("📊 Rekap Absensi")
 
-    if os.path.exists(ABSEN_FILE):
-        df = pd.read_csv(ABSEN_FILE)
-        st.dataframe(df, use_container_width=True)
+   if os.path.exists(ABSEN_FILE):
+    df = pd.read_csv(ABSEN_FILE)
+
+    # AUTO FIX JIKA STRUKTUR LAMA
+    if list(df.columns) != COLUMNS:
+        df = pd.DataFrame(columns=COLUMNS)
+else:
+    df = pd.DataFrame(columns=COLUMNS)
 
         df.to_excel("rekap_absensi.xlsx", index=False)
         with open("rekap_absensi.xlsx","rb") as f:
