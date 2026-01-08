@@ -78,7 +78,7 @@ def admin_page():
 
     # ===== JAM MASUK =====
     st.divider()
-    st.subheader("⏰ Jam Masuk")
+    st.subheader("⏰ Pengaturan Jam Masuk")
 
     cfg = load_config()
     jam_default = cfg.iloc[0]["jam_masuk"]
@@ -105,16 +105,14 @@ def admin_page():
     st.divider()
     st.subheader("📊 Rekap Absensi")
 
-   if os.path.exists(ABSEN_FILE):
-    df = pd.read_csv(ABSEN_FILE)
+    if os.path.exists(ABSEN_FILE):
+        df = pd.read_csv(ABSEN_FILE)
+        if list(df.columns) != COLUMNS:
+            df = pd.DataFrame(columns=COLUMNS)
 
-    # AUTO FIX JIKA STRUKTUR LAMA
-    if list(df.columns) != COLUMNS:
-        df = pd.DataFrame(columns=COLUMNS)
-else:
-    df = pd.DataFrame(columns=COLUMNS)
-
+        st.dataframe(df, use_container_width=True)
         df.to_excel("rekap_absensi.xlsx", index=False)
+
         with open("rekap_absensi.xlsx","rb") as f:
             st.download_button("⬇️ Download Excel", f)
     else:
@@ -127,18 +125,20 @@ else:
     users = load_users()
 
     with st.expander("➕ Tambah Guru"):
-        u = st.text_input("Username")
-        p = st.text_input("Password", type="password")
-        if st.button("Tambah"):
-            if u in users.username.values:
+        u = st.text_input("Username Guru Baru")
+        p = st.text_input("Password Guru", type="password")
+        if st.button("Tambah Guru"):
+            if u == "":
+                st.warning("Username kosong")
+            elif u in users.username.values:
                 st.error("Username sudah ada")
             else:
-                users.loc[len(users)] = [u,p,"guru"]
+                users.loc[len(users)] = [u, p, "guru"]
                 save_users(users)
                 st.success("Guru ditambahkan")
                 st.rerun()
 
-    st.dataframe(users)
+    st.dataframe(users, use_container_width=True)
 
     guru_list = users[users.role=="guru"].username.tolist()
     if guru_list:
@@ -147,13 +147,13 @@ else:
 
         col1,col2 = st.columns(2)
         with col1:
-            if st.button("✏️ Update"):
+            if st.button("✏️ Update Password"):
                 users.loc[users.username==g,"password"] = new_pw
                 save_users(users)
                 st.success("Password diperbarui")
                 st.rerun()
         with col2:
-            if st.button("❌ Hapus"):
+            if st.button("❌ Hapus Guru"):
                 users = users[users.username!=g]
                 save_users(users)
                 st.warning("Guru dihapus")
@@ -174,7 +174,7 @@ def guru_page():
 
     decoded = decode(Image.open(img))
     if not decoded:
-        st.error("QR tidak terbaca")
+        st.error("❌ QR tidak terbaca")
         return
 
     today = str(datetime.date.today())
@@ -182,30 +182,32 @@ def guru_page():
     now_str = now.strftime("%H:%M:%S")
 
     if decoded[0].data.decode() != f"ABSEN_GURU_{today}":
-        st.error("QR tidak valid")
+        st.error("❌ QR tidak valid")
         return
 
     if os.path.exists(ABSEN_FILE):
         df = pd.read_csv(ABSEN_FILE)
+        if list(df.columns) != COLUMNS:
+            df = pd.DataFrame(columns=COLUMNS)
     else:
         df = pd.DataFrame(columns=COLUMNS)
 
-    mask = (df.tanggal==today) & (df.guru==st.session_state.user)
+    mask = (df["tanggal"]==today) & (df["guru"]==st.session_state.user)
 
-    # ===== SCAN PERTAMA =====
+    # ===== MASUK =====
     if not mask.any():
         status = "HADIR" if now.time() <= batas else "TERLAMBAT"
         df.loc[len(df)] = [today, st.session_state.user, now_str, "", status]
-        st.success(f"✅ Absen Masuk ({status})")
+        st.success(f"✅ Absen MASUK ({status})")
 
-    # ===== SCAN KEDUA =====
+    # ===== PULANG =====
     else:
         idx = df[mask].index[0]
-        if df.loc[idx,"jam_pulang"]=="" or pd.isna(df.loc[idx,"jam_pulang"]):
+        if df.loc[idx,"jam_pulang"] in ["", None] or pd.isna(df.loc[idx,"jam_pulang"]):
             df.loc[idx,"jam_pulang"] = now_str
-            st.success("✅ Absen Pulang")
+            st.success("✅ Absen PULANG")
         else:
-            st.warning("⚠️ Sudah absen masuk & pulang")
+            st.warning("⚠️ Kamu sudah absen masuk & pulang")
 
     df.to_csv(ABSEN_FILE, index=False)
     st.dataframe(df[mask])
