@@ -16,6 +16,7 @@ USERS = {
 }
 
 ABSEN_FILE = "absensi.csv"
+QR_PATH = "qr_absen.png"
 
 # ================= SESSION =================
 if "login" not in st.session_state:
@@ -45,7 +46,7 @@ def logout():
         st.session_state.clear()
         st.rerun()
 
-# ================= ADMIN =================
+# ================= ADMIN PAGE =================
 def admin_page():
     st.subheader("🧑‍💼 Admin Panel")
 
@@ -55,15 +56,30 @@ def admin_page():
     st.success("Kode QR Hari Ini")
     st.code(kode)
 
-    qr = qrcode.make(kode)
-    st.image(qr, caption="QR Absensi Hari Ini")
+    # Generate QR (AMAN STREAMLIT CLOUD)
+    qr = qrcode.QRCode(
+        version=1,
+        box_size=10,
+        border=4
+    )
+    qr.add_data(kode)
+    qr.make(fit=True)
 
-# ================= GURU =================
+    img_qr = qr.make_image(fill_color="black", back_color="white")
+    img_qr.save(QR_PATH)
+
+    st.image(QR_PATH, caption="QR Absensi Hari Ini", use_container_width=True)
+
+    # Download QR (opsional)
+    with open(QR_PATH, "rb") as f:
+        st.download_button("⬇️ Download QR", f, file_name="qr_absensi.png")
+
+# ================= GURU PAGE =================
 def guru_page():
     st.subheader("👨‍🏫 Absensi Guru")
-    st.info("Scan QR absensi")
+    st.info("Scan QR absensi menggunakan kamera HP")
 
-    img = st.camera_input("Scan QR di sini")
+    img = st.camera_input("📸 Scan QR di sini")
 
     if img:
         image = Image.open(img)
@@ -92,9 +108,9 @@ def guru_page():
                 st.success("✅ Absensi Berhasil")
                 st.write(data)
             else:
-                st.error("❌ QR tidak valid")
+                st.error("❌ QR tidak valid / bukan hari ini")
         else:
-            st.error("QR tidak terbaca")
+            st.error("❌ QR tidak terbaca")
 
 # ================= MAIN =================
 if not st.session_state.login:
