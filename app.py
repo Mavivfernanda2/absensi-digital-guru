@@ -11,9 +11,24 @@ st.set_page_config("Absensi Guru", layout="centered")
 
 USERS = {
     "admin": {"password": "admin123", "role": "admin"},
-    "guru1": {"password": "guru123", "role": "guru"},
-    "guru2": {"password": "guru123", "role": "guru"},
+
+    "guru01": {"password": "guru123", "role": "guru"},
+    "guru02": {"password": "guru123", "role": "guru"},
+    "guru03": {"password": "guru123", "role": "guru"},
+    "guru04": {"password": "guru123", "role": "guru"},
+    "guru05": {"password": "guru123", "role": "guru"},
+    "guru06": {"password": "guru123", "role": "guru"},
+    "guru07": {"password": "guru123", "role": "guru"},
+    "guru08": {"password": "guru123", "role": "guru"},
+    "guru09": {"password": "guru123", "role": "guru"},
+    "guru10": {"password": "guru123", "role": "guru"},
+    "guru11": {"password": "guru123", "role": "guru"},
+    "guru12": {"password": "guru123", "role": "guru"},
+    "guru13": {"password": "guru123", "role": "guru"},
+    "guru14": {"password": "guru123", "role": "guru"},
+    "guru15": {"password": "guru123", "role": "guru"},
 }
+
 
 ABSEN_FILE = "absensi.csv"
 QR_PATH = "qr_absen.png"
