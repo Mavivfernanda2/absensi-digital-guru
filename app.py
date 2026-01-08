@@ -210,7 +210,13 @@ def guru_page():
             st.warning("⚠️ Kamu sudah absen masuk & pulang")
 
     df.to_csv(ABSEN_FILE, index=False)
-    st.dataframe(df[mask])
+    st.dataframe(
+    df[
+        (df["tanggal"] == today) &
+        (df["guru"] == st.session_state.user)
+    ]
+)
+
 
 # ================= MAIN =================
 if not st.session_state.login:
