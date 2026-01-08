@@ -28,7 +28,7 @@ def init_files():
 
 init_files()
 
-# ================= LOADERS =================
+# ================= HELPERS =================
 def load_users():
     return pd.read_csv(USER_FILE)
 
@@ -41,7 +41,7 @@ def load_config():
 def save_config(jam):
     pd.DataFrame({"jam_masuk":[jam]}).to_csv(CONFIG_FILE, index=False)
 
-# ================= PAGE CONFIG =================
+# ================= PAGE =================
 st.set_page_config("Absensi Digital Guru", layout="centered")
 
 # ================= SESSION =================
@@ -76,133 +76,98 @@ def logout():
 def admin_page():
     st.subheader("🧑‍💼 Admin Panel")
 
-    # ================= JAM MASUK =================
+    # ===== JAM MASUK =====
     st.divider()
-    st.subheader("⏰ Pengaturan Jam Masuk")
+    st.subheader("⏰ Jam Masuk")
 
     cfg = load_config()
     jam_default = cfg.iloc[0]["jam_masuk"]
-
     jam_masuk = st.time_input(
         "Jam Masuk Sekolah",
         datetime.datetime.strptime(jam_default, "%H:%M").time()
     )
 
-    if st.button("💾 Simpan Jam Masuk"):
+    if st.button("💾 Simpan Jam"):
         save_config(jam_masuk.strftime("%H:%M"))
-        st.success("Jam masuk berhasil disimpan")
+        st.success("Jam masuk disimpan")
 
-    # ================= REKAP =================
-    st.divider()
-    st.subheader("📊 Rekap Absensi")
-
-    if os.path.exists(ABSEN_FILE):
-        df_absen = pd.read_csv(ABSEN_FILE)
-        st.dataframe(df_absen, use_container_width=True)
-
-        df_absen.to_excel("rekap_absensi.xlsx", index=False)
-        with open("rekap_absensi.xlsx", "rb") as f:
-            st.download_button(
-                "⬇️ Download Rekap Excel",
-                f,
-                file_name="rekap_absensi.xlsx"
-            )
-    else:
-        st.info("Belum ada data absensi")
-
-    # ================= MANAJEMEN GURU =================
-    st.divider()
-    st.subheader("👥 Manajemen Guru")
-
-    users = load_users()
-
-    # ===== TAMBAH GURU =====
-    with st.expander("➕ Tambah Guru"):
-        new_user = st.text_input("Username Guru Baru")
-        new_pass = st.text_input("Password Guru", type="password")
-
-        if st.button("Tambah Guru"):
-            if new_user == "":
-                st.warning("Username tidak boleh kosong")
-            elif new_user in users.username.values:
-                st.error("Username sudah ada")
-            else:
-                users.loc[len(users)] = [new_user, new_pass, "guru"]
-                save_users(users)
-                st.success("Guru berhasil ditambahkan")
-                st.rerun()
-
-    # ===== DAFTAR USER =====
-    st.dataframe(users, use_container_width=True)
-
-    # ===== EDIT / HAPUS =====
-    guru_list = users[users.role == "guru"].username.tolist()
-
-    if guru_list:
-        selected = st.selectbox("Pilih Guru", guru_list)
-        new_pw = st.text_input("Password Baru", type="password")
-
-        col1, col2 = st.columns(2)
-
-        with col1:
-            if st.button("✏️ Update Password"):
-                users.loc[users.username == selected, "password"] = new_pw
-                save_users(users)
-                st.success("Password guru diperbarui")
-                st.rerun()
-
-        with col2:
-            if st.button("❌ Hapus Guru"):
-                users = users[users.username != selected]
-                save_users(users)
-                st.warning("Guru berhasil dihapus")
-                st.rerun()
-
-
-    # === QR ===
+    # ===== QR =====
     st.divider()
     today = datetime.date.today()
     kode = f"ABSEN_GURU_{today}"
-
     st.code(kode)
+
     qr = qrcode.make(kode)
     qr.save(QR_PATH)
     st.image(QR_PATH, use_container_width=True)
 
-    # === REKAP ===
+    # ===== REKAP =====
     st.divider()
     st.subheader("📊 Rekap Absensi")
 
     if os.path.exists(ABSEN_FILE):
         df = pd.read_csv(ABSEN_FILE)
         st.dataframe(df, use_container_width=True)
+
         df.to_excel("rekap_absensi.xlsx", index=False)
         with open("rekap_absensi.xlsx","rb") as f:
             st.download_button("⬇️ Download Excel", f)
     else:
         st.info("Belum ada data")
 
-    # === GURU ===
+    # ===== MANAJEMEN GURU =====
     st.divider()
     st.subheader("👥 Manajemen Guru")
+
     users = load_users()
+
+    with st.expander("➕ Tambah Guru"):
+        u = st.text_input("Username")
+        p = st.text_input("Password", type="password")
+        if st.button("Tambah"):
+            if u in users.username.values:
+                st.error("Username sudah ada")
+            else:
+                users.loc[len(users)] = [u,p,"guru"]
+                save_users(users)
+                st.success("Guru ditambahkan")
+                st.rerun()
+
     st.dataframe(users)
+
+    guru_list = users[users.role=="guru"].username.tolist()
+    if guru_list:
+        g = st.selectbox("Pilih Guru", guru_list)
+        new_pw = st.text_input("Password Baru", type="password")
+
+        col1,col2 = st.columns(2)
+        with col1:
+            if st.button("✏️ Update"):
+                users.loc[users.username==g,"password"] = new_pw
+                save_users(users)
+                st.success("Password diperbarui")
+                st.rerun()
+        with col2:
+            if st.button("❌ Hapus"):
+                users = users[users.username!=g]
+                save_users(users)
+                st.warning("Guru dihapus")
+                st.rerun()
 
 # ================= GURU =================
 def guru_page():
     st.subheader("👨‍🏫 Absensi Guru")
 
-    cfg = load_config()
-    batas = datetime.datetime.strptime(cfg.iloc[0]["jam_masuk"],"%H:%M").time()
+    batas = datetime.datetime.strptime(
+        load_config().iloc[0]["jam_masuk"], "%H:%M"
+    ).time()
 
     img = st.camera_input("📸 Scan QR")
 
     if not img:
         return
 
-    image = Image.open(img)
-    decoded = decode(image)
-
+    decoded = decode(Image.open(img))
     if not decoded:
         st.error("QR tidak terbaca")
         return
@@ -220,28 +185,22 @@ def guru_page():
     else:
         df = pd.DataFrame(columns=COLUMNS)
 
-    mask = (df["tanggal"]==today) & (df["guru"]==st.session_state.user)
+    mask = (df.tanggal==today) & (df.guru==st.session_state.user)
 
-    # ===== MASUK =====
-    if now.time() <= batas:
-        status = "HADIR"
-        if mask.any():
-            st.warning("Sudah absen masuk")
-        else:
-            df.loc[len(df)] = [today, st.session_state.user, now_str, "", status]
-            st.success(f"✅ Absen Masuk ({status})")
+    # ===== SCAN PERTAMA =====
+    if not mask.any():
+        status = "HADIR" if now.time() <= batas else "TERLAMBAT"
+        df.loc[len(df)] = [today, st.session_state.user, now_str, "", status]
+        st.success(f"✅ Absen Masuk ({status})")
 
-    # ===== PULANG =====
+    # ===== SCAN KEDUA =====
     else:
-        if not mask.any():
-            st.warning("Belum absen masuk")
+        idx = df[mask].index[0]
+        if df.loc[idx,"jam_pulang"]=="" or pd.isna(df.loc[idx,"jam_pulang"]):
+            df.loc[idx,"jam_pulang"] = now_str
+            st.success("✅ Absen Pulang")
         else:
-            idx = df[mask].index[0]
-            if df.loc[idx,"jam_pulang"]=="" or pd.isna(df.loc[idx,"jam_pulang"]):
-                df.loc[idx,"jam_pulang"] = now_str
-                st.success("✅ Absen Pulang")
-            else:
-                st.warning("Sudah absen pulang")
+            st.warning("⚠️ Sudah absen masuk & pulang")
 
     df.to_csv(ABSEN_FILE, index=False)
     st.dataframe(df[mask])
