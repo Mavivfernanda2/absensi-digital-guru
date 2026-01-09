@@ -81,22 +81,88 @@ def logout():
 def admin_page():
     st.subheader("🧑‍💼 Admin Panel")
 
-    jam = st.time_input(
-        "⏰ Jam Masuk",
-        datetime.datetime.strptime(load_config().iloc[0]["jam_masuk"], "%H:%M").time()
+    # ================= JAM MASUK =================
+    st.divider()
+    st.subheader("⏰ Pengaturan Jam Masuk")
+
+    cfg = load_config()
+    jam_default = cfg.iloc[0]["jam_masuk"]
+    jam_masuk = st.time_input(
+        "Jam Masuk Sekolah",
+        datetime.datetime.strptime(jam_default, "%H:%M").time()
     )
 
     if st.button("💾 Simpan Jam"):
-        pd.DataFrame({"jam_masuk":[jam.strftime("%H:%M")]}).to_csv(CONFIG_FILE, index=False)
-        st.success("Jam disimpan")
+        pd.DataFrame({"jam_masuk":[jam_masuk.strftime("%H:%M")]}).to_csv(CONFIG_FILE, index=False)
+        st.success("Jam masuk disimpan")
 
+    # ================= QR =================
+    st.divider()
     today = datetime.date.today()
     kode = f"ABSEN_GURU_{today}"
     qrcode.make(kode).save(QR_PATH)
-    st.image(QR_PATH)
+    st.image(QR_PATH, use_container_width=True)
+
+    # ================= REKAP =================
+    st.divider()
+    st.subheader("📊 Rekap Absensi")
 
     if os.path.exists(ABSEN_FILE):
-        st.dataframe(pd.read_csv(ABSEN_FILE))
+        df_absen = pd.read_csv(ABSEN_FILE)
+        st.dataframe(df_absen, use_container_width=True)
+
+        df_absen.to_excel("rekap_absensi.xlsx", index=False)
+        with open("rekap_absensi.xlsx","rb") as f:
+            st.download_button("⬇️ Download Excel", f)
+    else:
+        st.info("Belum ada data absensi")
+
+    # ================= MANAJEMEN GURU =================
+    st.divider()
+    st.subheader("👥 Manajemen Guru")
+
+    users = load_users()
+
+    # ----- TAMBAH GURU -----
+    with st.expander("➕ Tambah Guru"):
+        u = st.text_input("Username Guru Baru")
+        p = st.text_input("Password Guru", type="password")
+        if st.button("Tambah Guru"):
+            if u == "":
+                st.warning("Username tidak boleh kosong")
+            elif u in users.username.values:
+                st.error("Username sudah ada")
+            else:
+                users.loc[len(users)] = [u, p, "guru"]
+                users.to_csv(USER_FILE, index=False)
+                st.success("Guru berhasil ditambahkan")
+                st.rerun()
+
+    st.dataframe(users, use_container_width=True)
+
+    # ----- EDIT / HAPUS -----
+    guru_list = users[users.role=="guru"].username.tolist()
+
+    if guru_list:
+        st.subheader("✏️ Edit / Hapus Guru")
+        g = st.selectbox("Pilih Guru", guru_list)
+        new_pw = st.text_input("Password Baru", type="password")
+
+        col1, col2 = st.columns(2)
+
+        with col1:
+            if st.button("🔑 Update Password"):
+                users.loc[users.username==g, "password"] = new_pw
+                users.to_csv(USER_FILE, index=False)
+                st.success("Password diperbarui")
+                st.rerun()
+
+        with col2:
+            if st.button("❌ Hapus Guru"):
+                users = users[users.username!=g]
+                users.to_csv(USER_FILE, index=False)
+                st.warning("Guru dihapus")
+                st.rerun()
 
 # ================= GURU =================
 def guru_page():
