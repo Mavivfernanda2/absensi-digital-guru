@@ -76,7 +76,7 @@ def get_location():
 def login_page():
     st.title("🔐 Login Guru")
 
-    with st.form("login"):
+    with st.form("login_form"):
         u = st.text_input("Username")
         p = st.text_input("Password", type="password")
         submit = st.form_submit_button("Login")
