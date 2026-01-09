@@ -60,19 +60,30 @@ if "login" not in st.session_state:
 
 # ================== GPS AUTO ==================
 def get_location():
-    st.components.v1.html("""
+    loc = st.components.v1.html("""
     <script>
-    navigator.geolocation.getCurrentPosition(
-        (pos) => {
-            window.parent.postMessage({
-                lat: pos.coords.latitude,
-                lon: pos.coords.longitude
-            }, "*");
-        }
-    );
+    const sendLocation = () => {
+        navigator.geolocation.getCurrentPosition(
+            (pos) => {
+                const data = {
+                    lat: pos.coords.latitude,
+                    lon: pos.coords.longitude
+                };
+                const streamlitEvent = new CustomEvent("streamlit:setComponentValue", {
+                    detail: data
+                });
+                window.dispatchEvent(streamlitEvent);
+            },
+            (err) => {
+                console.log(err);
+            }
+        );
+    };
+    sendLocation();
     </script>
     """, height=0)
 
+    return loc
 # ================== LOGIN ==================
 def login_page():
     st.title("🔐 Login")
@@ -108,12 +119,11 @@ def logout():
 def absensi_page():
     st.title("📍 ABSENSI GURU (QR + GPS)")
 
-    get_location()
-    location = st.session_state.get("location")
+    location = get_location()
 
     if not location:
         st.info("📡 Mengambil lokasi GPS...")
-        return
+        st.stop()
 
     user_pos = (location["lat"], location["lon"])
     sekolah_pos = (SEKOLAH_LAT, SEKOLAH_LON)
@@ -123,13 +133,15 @@ def absensi_page():
 
     if jarak > MAX_RADIUS:
         st.error("❌ Di luar radius sekolah")
-        return
+        st.stop()
 
     img = st.camera_input("📸 Scan QR Absensi")
 
     if not img:
         st.warning("Silakan scan QR")
-        return
+        st.stop()
+
+    st.success("📸 Kamera aktif & QR siap diproses")
 
     # ================= QR PROCESS =================
     decoded = decode(Image.open(img))
