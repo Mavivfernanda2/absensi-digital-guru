@@ -75,7 +75,7 @@ def get_location():
 
 # ================== LOGIN ==================
 def login_page():
-    st.title("🔐 Login Guru")
+    st.title("🔐 Login")
 
     with st.form("login_form"):
         u = st.text_input("Username")
@@ -83,14 +83,21 @@ def login_page():
         submit = st.form_submit_button("Login")
 
     if submit:
-        df = pd.read_csv(GURU_FILE)
-        user = df[(df.username == u) & (df.password == p)]
+        users = pd.read_csv(GURU_FILE)
+        user = users[(users.username == u) & (users.password == p)]
+
         if not user.empty:
+            data_user = user.iloc[0].to_dict()
+
+            # fallback role (AMAN)
+            if "role" not in data_user:
+                data_user["role"] = "admin" if data_user["username"] == "admin" else "guru"
+
+            st.session_state.user = data_user
             st.session_state.login = True
-            st.session_state.user = user.iloc[0].to_dict()
             st.rerun()
         else:
-            st.error("Username / Password salah")
+            st.error("❌ Username / Password salah")
 
 # ================== LOGOUT ==================
 def logout():
@@ -203,28 +210,21 @@ def guru_admin():
     st.dataframe(df, use_container_width=True)
 
 # ================== ROUTER ==================
-data_user = user.iloc[0].to_dict()
-
-# fallback role (AMAN untuk data lama)
-if "role" not in data_user:
-    data_user["role"] = "admin" if data_user["username"] == "admin" else "guru"
-
-st.session_state.user = data_user
-st.session_state.login = True
-st.rerun()
+if "login" not in st.session_state:
+    st.session_state.login = False
 
 if not st.session_state.login:
     login_page()
 else:
-    st.sidebar.success(f"Login: {st.session_state.user.get('nama', st.session_state.user['username'])}")
+    user = st.session_state.user
+    role = user.get("role", "guru")
 
-    if st.sidebar.button("Logout"):
+    st.sidebar.success(f"Login: {user.get('nama', user['username'])}")
+
+    if st.sidebar.button("🚪 Logout"):
         logout()
 
-    # ambil role dengan aman
-    role = st.session_state.user.get("role", "guru")
-
-    # menu sidebar
+    # MENU SIDEBAR
     if role == "admin":
         menu = st.sidebar.radio(
             "Menu",
@@ -236,7 +236,7 @@ else:
             ["Absensi"]
         )
 
-    # routing halaman
+    # ROUTING HALAMAN
     if menu == "Absensi":
         absensi_page()
     elif menu == "Admin Panel":
