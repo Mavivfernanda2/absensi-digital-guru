@@ -210,7 +210,7 @@ else:
     if st.sidebar.button("Logout"):
         logout()
 
-    role = st.session_state.user["role"]
+    role = st.session_state.user.get("role", "guru")
 
     menu = st.sidebar.radio(
         "Menu",
