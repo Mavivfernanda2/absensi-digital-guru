@@ -13,9 +13,6 @@ st.set_page_config(
 
 DATA_DIR = "data"
 GURU_FILE = f"{DATA_DIR}/guru.csv"
-id,nama,username,password
-1,Admin Guru,admin,admin123
-
 ABSEN_FILE = f"{DATA_DIR}/absensi.csv"
 
 SEKOLAH_LAT = -7.4466   # LAT SEKOLAH
