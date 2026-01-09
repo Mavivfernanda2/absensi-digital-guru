@@ -52,26 +52,6 @@ if "login" not in st.session_state:
     st.session_state.user = None
     st.session_state.location = None
 
-# ================== GPS AUTO ==================
-def get_location():
-    loc = st.components.v1.html("""
-    <script>
-    navigator.geolocation.getCurrentPosition(
-        (pos) => {
-            const data = {
-                lat: pos.coords.latitude,
-                lon: pos.coords.longitude
-            };
-            const event = new CustomEvent("streamlit:setComponentValue", {
-                detail: data
-            });
-            window.dispatchEvent(event);
-        }
-    );
-    </script>
-    """, height=0)
-    return loc
-
 # ================== LOGIN ==================
 def login_page():
     st.title("🔐 Login Guru")
@@ -106,52 +86,44 @@ def logout():
 def absensi_page():
     st.title("📍 ABSENSI GURU")
 
-    lokasi = get_location()
-    if not lokasi:
-        st.info("📡 Mengambil lokasi GPS...")
-        st.stop()
-
-    sekolah = pd.read_csv(LOKASI_FILE).iloc[0]
-    jarak = geodesic(
-        (lokasi["lat"], lokasi["lon"]),
-        (sekolah["lat"], sekolah["lon"])
-    ).meters
-
-    st.info(f"📏 Jarak dari sekolah: {int(jarak)} meter")
-
-    if jarak > sekolah["radius"]:
-        st.error("❌ Di luar area sekolah")
-        st.stop()
-
     guru = st.session_state.user
     today = date.today().isoformat()
     now = datetime.now().strftime("%H:%M:%S")
 
     df = pd.read_csv(ABSEN_FILE)
-    row = df[(df.id == guru["id"]) & (df.tanggal == today)]
+
+    data_hari_ini = df[
+        (df["id"] == guru["id"]) &
+        (df["tanggal"] == today)
+    ]
 
     col1, col2 = st.columns(2)
 
-    if row.empty:
-        if col1.button("🟢 ABSEN MASUK"):
+    if data_hari_ini.empty:
+        if col1.button("✅ ABSEN MASUK"):
             df.loc[len(df)] = [
-                guru["id"], guru["nama"], today, now, ""
+                guru["id"],
+                guru["nama"],
+                today,
+                now,
+                ""
             ]
             df.to_csv(ABSEN_FILE, index=False)
-            st.success("✅ Absen masuk berhasil")
+            st.success("Absen masuk berhasil")
             st.rerun()
     else:
-        if row.iloc[0]["jam_pulang"] == "":
-            if col2.button("🔴 ABSEN PULANG"):
-                df.loc[row.index, "jam_pulang"] = now
+        if data_hari_ini.iloc[0]["jam_pulang"] == "":
+            if col2.button("🚪 ABSEN PULANG"):
+                idx = data_hari_ini.index[0]
+                df.loc[idx, "jam_pulang"] = now
                 df.to_csv(ABSEN_FILE, index=False)
-                st.success("✅ Absen pulang berhasil")
+                st.success("Absen pulang berhasil")
                 st.rerun()
         else:
-            st.success("✔ Absen hari ini sudah lengkap")
+            st.success("✔ Anda sudah absen masuk & pulang hari ini")
 
     st.subheader("📋 Absensi Hari Ini")
-    st.dataframe(df[df.tanggal == today], use_container_width=True)
+    st.dataframe(df[df["tanggal"] == today], use_container_width=True)
 
 # ================== ADMIN PANEL ==================
 def admin_page():
