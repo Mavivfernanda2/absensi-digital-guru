@@ -4,3 +4,4 @@ pyzbar
 qrcode
 pandas
 openpyxl
+geopy
