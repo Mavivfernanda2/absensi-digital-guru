@@ -203,24 +203,43 @@ def guru_admin():
     st.dataframe(df, use_container_width=True)
 
 # ================== ROUTER ==================
+data_user = user.iloc[0].to_dict()
+
+# fallback role (AMAN untuk data lama)
+if "role" not in data_user:
+    data_user["role"] = "admin" if data_user["username"] == "admin" else "guru"
+
+st.session_state.user = data_user
+st.session_state.login = True
+st.rerun()
+
 if not st.session_state.login:
     login_page()
 else:
-    st.sidebar.success(f"Login: {st.session_state.user['nama']}")
+    st.sidebar.success(f"Login: {st.session_state.user.get('nama', st.session_state.user['username'])}")
+
     if st.sidebar.button("Logout"):
         logout()
 
+    # ambil role dengan aman
     role = st.session_state.user.get("role", "guru")
 
-    menu = st.sidebar.radio(
-        "Menu",
-        ["Absensi", "Admin Panel", "Manajemen Guru"]
-        if role == "admin" else ["Absensi"]
-    )
+    # menu sidebar
+    if role == "admin":
+        menu = st.sidebar.radio(
+            "Menu",
+            ["Absensi", "Admin Panel", "Manajemen Guru"]
+        )
+    else:
+        menu = st.sidebar.radio(
+            "Menu",
+            ["Absensi"]
+        )
 
+    # routing halaman
     if menu == "Absensi":
         absensi_page()
     elif menu == "Admin Panel":
         admin_page()
-    else:
+    elif menu == "Manajemen Guru":
         guru_admin()
