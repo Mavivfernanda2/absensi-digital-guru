@@ -1,220 +1,185 @@
 import streamlit as st
 import pandas as pd
-import datetime, os, math
-from PIL import Image
-from pyzbar.pyzbar import decode
-import qrcode
-import streamlit.components.v1 as components
+from datetime import datetime
+from geopy.distance import geodesic
+import os
 
-# ================= FILE =================
-USER_FILE = "users.csv"
-ABSEN_FILE = "absensi.csv"
-CONFIG_FILE = "config.csv"
-LOKASI_FILE = "lokasi.csv"
-QR_PATH = "qr_absen.png"
+# ================== CONFIG ==================
+st.set_page_config(
+    page_title="ABSENSI GURU QR + GPS",
+    page_icon="📍",
+    layout="wide"
+)
 
-COLUMNS = ["tanggal", "guru", "jam_masuk", "jam_pulang", "status"]
+DATA_DIR = "data"
+GURU_FILE = f"{DATA_DIR}/guru.csv"
+ABSEN_FILE = f"{DATA_DIR}/absensi.csv"
 
-# ================= INIT =================
-def init_files():
-    if not os.path.exists(USER_FILE):
-        pd.DataFrame([
-            {"username":"admin","password":"admin123","role":"admin"},
-            {"username":"guru01","password":"guru123","role":"guru"},
-        ]).to_csv(USER_FILE, index=False)
+SEKOLAH_LAT = -7.4466   # LAT SEKOLAH
+SEKOLAH_LON = 112.7183  # LON SEKOLAH
+MAX_RADIUS = 100        # meter
 
-    if not os.path.exists(CONFIG_FILE):
-        pd.DataFrame({"jam_masuk":["07:00"]}).to_csv(CONFIG_FILE, index=False)
+# ================== INIT ==================
+os.makedirs(DATA_DIR, exist_ok=True)
 
-    if not os.path.exists(LOKASI_FILE):
-        pd.DataFrame({
-            "latitude":[-7.446123],
-            "longitude":[112.718456],
-            "radius":[100]
-        }).to_csv(LOKASI_FILE, index=False)
+if not os.path.exists(GURU_FILE):
+    pd.DataFrame(columns=["id", "nama", "username", "password"]).to_csv(GURU_FILE, index=False)
 
-init_files()
+if not os.path.exists(ABSEN_FILE):
+    pd.DataFrame(columns=["id", "nama", "tanggal", "jam_masuk", "jam_pulang"]).to_csv(ABSEN_FILE, index=False)
 
-# ================= GPS AUTO =================
-def auto_gps():
-    components.html("""
+# ================== SESSION ==================
+if "login" not in st.session_state:
+    st.session_state.login = False
+    st.session_state.user = None
+
+# ================== GPS AUTO ==================
+def get_location():
+    st.components.v1.html("""
     <script>
     navigator.geolocation.getCurrentPosition(
         (pos) => {
+            const lat = pos.coords.latitude;
+            const lon = pos.coords.longitude;
             window.parent.postMessage(
-                {
-                    lat: pos.coords.latitude,
-                    lon: pos.coords.longitude
-                },
+                {lat: lat, lon: lon},
                 "*"
             );
-        },
-        () => {
-            window.parent.postMessage({error: true}, "*");
         }
     );
     </script>
     """, height=0)
 
-# ================= HELPERS =================
-def load_users(): return pd.read_csv(USER_FILE)
-def load_config(): return pd.read_csv(CONFIG_FILE)
-def load_lokasi():
-    d = pd.read_csv(LOKASI_FILE)
-    return d.iloc[0]["latitude"], d.iloc[0]["longitude"], d.iloc[0]["radius"]
+    loc = st.session_state.get("location")
+    return loc
 
-def hitung_jarak(lat1, lon1, lat2, lon2):
-    R = 6371000
-    dlat = math.radians(lat2 - lat1)
-    dlon = math.radians(lon2 - lon1)
-    a = math.sin(dlat/2)**2 + math.cos(math.radians(lat1))*math.cos(math.radians(lat2))*math.sin(dlon/2)**2
-    return 2 * R * math.atan2(math.sqrt(a), math.sqrt(1-a))
-
-# ================= PAGE =================
-st.set_page_config("Absensi Guru", layout="centered")
-
-if "login" not in st.session_state:
-    st.session_state.update({
-        "login": False,
-        "user": "",
-        "role": "",
-        "lat": None,
-        "lon": None
-    })
-
-# ================= LOGIN =================
+# ================== LOGIN ==================
 def login_page():
-    st.title("🔐 Login Absensi Guru")
-    u = st.text_input("Username")
-    p = st.text_input("Password", type="password")
+    st.title("🔐 Login Guru")
 
-    if st.button("Login"):
-        users = load_users()
-        data = users[(users.username == u) & (users.password == p)]
-        if not data.empty:
-            st.session_state.update({
-                "login": True,
-                "user": u,
-                "role": data.iloc[0]["role"]
-            })
+    with st.form("login_form"):
+        u = st.text_input("Username")
+        p = st.text_input("Password", type="password")
+        submit = st.form_submit_button("Login")
+
+    if submit:
+        df = pd.read_csv(GURU_FILE)
+        user = df[(df.username == u) & (df.password == p)]
+        if not user.empty:
+            st.session_state.login = True
+            st.session_state.user = user.iloc[0].to_dict()
             st.rerun()
         else:
-            st.error("❌ Login gagal")
+            st.error("Username / Password salah")
 
+# ================== LOGOUT ==================
 def logout():
-    if st.button("🚪 Logout"):
-        st.session_state.clear()
+    st.session_state.login = False
+    st.session_state.user = None
+    st.rerun()
+
+# ================== ABSENSI ==================
+def absensi_page():
+    st.title("📍 ABSENSI QR + GPS")
+
+    get_location()
+    location = st.session_state.get("location")
+
+    if not location:
+        st.warning("Mengambil lokasi GPS...")
+        st.stop()
+
+    user_pos = (location["lat"], location["lon"])
+    sekolah_pos = (SEKOLAH_LAT, SEKOLAH_LON)
+
+    jarak = geodesic(user_pos, sekolah_pos).meters
+
+    st.info(f"📏 Jarak dari sekolah: {int(jarak)} meter")
+
+    if jarak > MAX_RADIUS:
+        st.error("❌ Anda di luar area absensi")
+        st.stop()
+
+    guru = st.session_state.user
+    today = datetime.now().strftime("%Y-%m-%d")
+    now = datetime.now().strftime("%H:%M:%S")
+
+    df = pd.read_csv(ABSEN_FILE)
+    row = df[(df.id == guru["id"]) & (df.tanggal == today)]
+
+    col1, col2 = st.columns(2)
+
+    if row.empty:
+        if col1.button("✅ ABSEN MASUK"):
+            new = {
+                "id": guru["id"],
+                "nama": guru["nama"],
+                "tanggal": today,
+                "jam_masuk": now,
+                "jam_pulang": ""
+            }
+            df = pd.concat([df, pd.DataFrame([new])])
+            df.to_csv(ABSEN_FILE, index=False)
+            st.success("Absen masuk berhasil")
+            st.rerun()
+    else:
+        if row.iloc[0]["jam_pulang"] == "":
+            if col2.button("🚪 ABSEN PULANG"):
+                df.loc[row.index, "jam_pulang"] = now
+                df.to_csv(ABSEN_FILE, index=False)
+                st.success("Absen pulang berhasil")
+                st.rerun()
+        else:
+            st.success("✔ Anda sudah absen lengkap hari ini")
+
+    st.subheader("📋 TABEL ABSENSI HARI INI")
+    st.dataframe(df[df.tanggal == today], use_container_width=True)
+
+# ================== ADMIN GURU ==================
+def guru_admin():
+    st.title("👩‍🏫 Manajemen Guru")
+
+    df = pd.read_csv(GURU_FILE)
+
+    with st.form("add_guru"):
+        nama = st.text_input("Nama Guru")
+        user = st.text_input("Username")
+        pw = st.text_input("Password")
+        add = st.form_submit_button("Tambah Guru")
+
+    if add:
+        new = {
+            "id": len(df) + 1,
+            "nama": nama,
+            "username": user,
+            "password": pw
+        }
+        df = pd.concat([df, pd.DataFrame([new])])
+        df.to_csv(GURU_FILE, index=False)
+        st.success("Guru ditambahkan")
         st.rerun()
 
-# ================= ADMIN =================
-def admin_page():
-    st.header("🧑‍💼 Admin Panel")
+    st.subheader("📋 Data Guru")
+    st.dataframe(df)
 
-    # ---- LOKASI SEKOLAH ----
-    st.subheader("📍 Lokasi Sekolah")
-    lat, lon, rad = load_lokasi()
-    nlat = st.number_input("Latitude", value=float(lat), format="%.6f")
-    nlon = st.number_input("Longitude", value=float(lon), format="%.6f")
-    nrad = st.number_input("Radius (meter)", 10, 1000, int(rad))
+    del_id = st.number_input("ID Guru yang dihapus", step=1)
+    if st.button("🗑 Hapus Guru"):
+        df = df[df.id != del_id]
+        df.to_csv(GURU_FILE, index=False)
+        st.success("Guru dihapus")
+        st.rerun()
 
-    if st.button("💾 Simpan Lokasi"):
-        pd.DataFrame({
-            "latitude":[nlat],
-            "longitude":[nlon],
-            "radius":[nrad]
-        }).to_csv(LOKASI_FILE, index=False)
-        st.success("Lokasi sekolah disimpan")
-
-    # ---- JAM MASUK ----
-    st.subheader("⏰ Jam Masuk")
-    jam = st.time_input(
-        "Jam Masuk",
-        datetime.datetime.strptime(load_config().iloc[0]["jam_masuk"], "%H:%M").time()
-    )
-    if st.button("💾 Simpan Jam"):
-        pd.DataFrame({"jam_masuk":[jam.strftime("%H:%M")]}).to_csv(CONFIG_FILE, index=False)
-        st.success("Jam masuk disimpan")
-
-    # ---- QR ----
-    st.subheader("📎 QR Hari Ini")
-    kode = f"ABSEN_GURU_{datetime.date.today()}"
-    qrcode.make(kode).save(QR_PATH)
-    st.image(QR_PATH)
-
-    # ---- DATA ABSENSI ----
-    st.subheader("📊 Data Absensi")
-    if os.path.exists(ABSEN_FILE):
-        df = pd.read_csv(ABSEN_FILE)
-        st.dataframe(df, use_container_width=True)
-
-        if st.button("🔥 Hapus Semua Absensi"):
-            os.remove(ABSEN_FILE)
-            st.warning("Semua data absensi dihapus")
-            st.rerun()
-
-# ================= GURU =================
-def guru_page():
-    st.header("👨‍🏫 Absensi Guru (AUTO GPS)")
-
-    st.info("📍 Mengambil lokasi otomatis dari perangkat...")
-    auto_gps()
-
-    lat = st.session_state.lat
-    lon = st.session_state.lon
-
-    if lat is None or lon is None:
-        st.warning("⏳ Menunggu izin lokasi...")
-        return
-
-    lat_s, lon_s, radius = load_lokasi()
-    jarak = hitung_jarak(lat, lon, lat_s, lon_s)
-    st.info(f"📏 Jarak ke sekolah: **{int(jarak)} meter**")
-
-    if jarak > radius:
-        st.error("❌ Kamu berada di luar radius sekolah")
-        return
-
-    img = st.camera_input("📸 Scan QR")
-    if not img:
-        return
-
-    qr = decode(Image.open(img))
-    if not qr or qr[0].data.decode() != f"ABSEN_GURU_{datetime.date.today()}":
-        st.error("❌ QR tidak valid")
-        return
-
-    now = datetime.datetime.now()
-    batas = datetime.datetime.strptime(load_config().iloc[0]["jam_masuk"], "%H:%M").time()
-    status = "HADIR" if now.time() <= batas else "TERLAMBAT"
-
-    df = pd.read_csv(ABSEN_FILE) if os.path.exists(ABSEN_FILE) else pd.DataFrame(columns=COLUMNS)
-    mask = (df["tanggal"] == str(datetime.date.today())) & (df["guru"] == st.session_state.user)
-
-    if not mask.any():
-        df.loc[len(df)] = [
-            str(datetime.date.today()),
-            st.session_state.user,
-            now.strftime("%H:%M:%S"),
-            "",
-            status
-        ]
-        st.success("✅ Absen MASUK berhasil")
-    else:
-        idx = df[mask].index[0]
-        if df.loc[idx, "jam_pulang"] == "":
-            df.loc[idx, "jam_pulang"] = now.strftime("%H:%M:%S")
-            st.success("✅ Absen PULANG berhasil")
-        else:
-            st.warning("⚠️ Absensi sudah lengkap")
-
-    df.to_csv(ABSEN_FILE, index=False)
-    st.subheader("📋 Absensi Hari Ini")
-    st.dataframe(df[df["tanggal"] == str(datetime.date.today())])
-
-# ================= MAIN =================
+# ================== ROUTER ==================
 if not st.session_state.login:
     login_page()
 else:
-    logout()
-    st.markdown(f"👤 Login sebagai **{st.session_state.user}**")
-    admin_page() if st.session_state.role == "admin" else guru_page()
+    st.sidebar.success(f"Login: {st.session_state.user['nama']}")
+    if st.sidebar.button("Logout"):
+        logout()
+
+    menu = st.sidebar.radio("Menu", ["Absensi", "Manajemen Guru"])
+
+    if menu == "Absensi":
+        absensi_page()
+    else:
+        guru_admin()
