@@ -106,54 +106,38 @@ def logout():
 
 # ================== ABSENSI GURU ==================
 def absensi_page():
-    st.title("📍 ABSENSI QR + GPS")
+    st.title("📍 ABSENSI GURU (QR + GPS)")
 
     get_location()
+    location = st.session_state.get("location")
 
-    if st.session_state.location is None:
-        st.warning("📡 Mengambil lokasi GPS...")
-        st.stop()
+    if not location:
+        st.info("📡 Mengambil lokasi GPS...")
+        return
 
-    lokasi = pd.read_csv(LOKASI_FILE).iloc[0]
-    sekolah_pos = (lokasi.lat, lokasi.lon)
-    user_pos = (st.session_state.location["lat"], st.session_state.location["lon"])
+    user_pos = (location["lat"], location["lon"])
+    sekolah_pos = (SEKOLAH_LAT, SEKOLAH_LON)
 
     jarak = geodesic(user_pos, sekolah_pos).meters
-    st.info(f"📏 Jarak ke sekolah: {int(jarak)} meter")
+    st.info(f"📏 Jarak dari sekolah: {int(jarak)} meter")
 
-    if jarak > lokasi.radius:
-        st.error("❌ Di luar radius absensi")
-        st.stop()
+    if jarak > MAX_RADIUS:
+        st.error("❌ Di luar radius sekolah")
+        return
 
-    guru = st.session_state.user
-    today = date.today().strftime("%Y-%m-%d")
-    now = datetime.now().strftime("%H:%M:%S")
+    img = st.camera_input("📸 Scan QR Absensi")
 
-    df = pd.read_csv(ABSEN_FILE)
-    row = df[(df.id == guru["id"]) & (df.tanggal == today)]
+    if not img:
+        st.warning("Silakan scan QR")
+        return
 
-    col1, col2 = st.columns(2)
+    # ================= QR PROCESS =================
+    decoded = decode(Image.open(img))
+    if not decoded:
+        st.error("❌ QR tidak valid")
+        return
 
-    if row.empty:
-        if col1.button("✅ ABSEN MASUK"):
-            df.loc[len(df)] = [
-                guru["id"], guru["nama"], today, now, ""
-            ]
-            df.to_csv(ABSEN_FILE, index=False)
-            st.success("Absen masuk berhasil")
-            st.rerun()
-    else:
-        if row.iloc[0]["jam_pulang"] == "":
-            if col2.button("🚪 ABSEN PULANG"):
-                df.loc[row.index, "jam_pulang"] = now
-                df.to_csv(ABSEN_FILE, index=False)
-                st.success("Absen pulang berhasil")
-                st.rerun()
-        else:
-            st.success("✔ Absensi hari ini sudah lengkap")
-
-    st.subheader("📋 Absensi Hari Ini")
-    st.dataframe(df[df.tanggal == today], use_container_width=True)
+    st.success("✅ QR valid, absensi diproses...")
 
 # ================== ADMIN PANEL ==================
 def admin_page():
