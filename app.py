@@ -27,6 +27,16 @@ if not os.path.exists(GURU_FILE):
 
 if not os.path.exists(ABSEN_FILE):
     pd.DataFrame(columns=["id", "nama", "tanggal", "jam_masuk", "jam_pulang"]).to_csv(ABSEN_FILE, index=False)
+# ================== LOGIN ==================
+df = pd.read_csv(GURU_FILE)
+if df.empty:
+    df = pd.DataFrame([{
+        "id": 1,
+        "nama": "Admin",
+        "username": "admin",
+        "password": "admin123"
+    }])
+    df.to_csv(GURU_FILE, index=False)
 
 # ================== SESSION ==================
 if "login" not in st.session_state:
