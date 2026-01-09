@@ -4,6 +4,8 @@ from datetime import datetime, date
 from geopy.distance import geodesic
 import os
 import qrcode
+from PIL import Image
+from pyzbar.pyzbar import decode
 
 # ================== CONFIG ==================
 st.set_page_config(
@@ -119,13 +121,16 @@ def logout():
 def absensi_page():
     st.title("📍 ABSENSI GURU (QR + GPS)")
 
-    location = get_location()
+    st.subheader("📡 Lokasi GPS")
 
-    if not location:
-        st.info("📡 Mengambil lokasi GPS...")
+    lat = st.number_input("Latitude", format="%.6f")
+    lon = st.number_input("Longitude", format="%.6f")
+
+    if not lat or not lon:
+        st.info("📍 Aktifkan GPS & izinkan lokasi di browser")
         st.stop()
 
-    user_pos = (location["lat"], location["lon"])
+    user_pos = (lat, lon)
     sekolah_pos = (SEKOLAH_LAT, SEKOLAH_LON)
 
     jarak = geodesic(user_pos, sekolah_pos).meters
@@ -134,6 +139,8 @@ def absensi_page():
     if jarak > MAX_RADIUS:
         st.error("❌ Di luar radius sekolah")
         st.stop()
+
+    st.divider()
 
     img = st.camera_input("📸 Scan QR Absensi")
 
